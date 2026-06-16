@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<title>抖音分享助手</title>
+<style>
+/* ── Reset ── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+/* ── Theme tokens ── */
+[data-theme="dark"]{
+  --bg:#0d1117;--bg2:#161b22;--card:rgba(22,27,34,.75);
+  --text:#c9d1d9;--text2:#8b949e;--text3:#484f58;
+  --accent:#00ff88;--accent2:#00d4ff;--accent-dim:rgba(0,255,136,.12);
+  --border:rgba(0,255,136,.15);--glow:0 0 20px rgba(0,255,136,.1);
+  --input-bg:rgba(13,17,23,.6);--log-bg:#0a0e14;
+  --shadow:0 4px 24px rgba(0,0,0,.4);
+}
+[data-theme="light"]{
+  --bg:#f0f2f5;--bg2:#e5e7eb;--card:rgba(255,255,255,.85);
+  --text:#1e293b;--text2:#64748b;--text3:#94a3b8;
+  --accent:#059669;--accent2:#0284c7;--accent-dim:rgba(5,150,105,.08);
+  --border:rgba(5,150,105,.2);--glow:0 4px 16px rgba(5,150,105,.08);
+  --input-bg:rgba(255,255,255,.6);--log-bg:#f8fafc;
+  --shadow:0 4px 24px rgba(0,0,0,.06);
+}
+
+/* ── Base ── */
+html{font-size:16px;-webkit-tap-highlight-color:transparent}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","SF Mono","Fira Code",monospace,sans-serif;
+  background:var(--bg);color:var(--text);line-height:1.6;min-height:100vh;
+  transition:background .3s,color .3s;overflow-x:hidden;
+}
+#binaryCanvas{
+  position:fixed;top:0;left:0;width:100%;height:100%;z-index:0;pointer-events:none;opacity:.12;
+}
+[data-theme="light"] #binaryCanvas{opacity:.06}
+.container{max-width:520px;margin:0 auto;padding:16px 16px 80px;position:relative;z-index:1}
+
+/* ── Top bar ── */
+.topbar{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:8px 0 20px;position:relative;gap:8px;
+}
+.topbar h1{
+  font-size:18px;font-weight:700;letter-spacing:1px;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  background-clip:text;flex:1;text-align:center;
+}
+.bar-btn{
+  border-radius:10px;border:1px solid var(--border);
+  background:var(--card);color:var(--text);cursor:pointer;
+  display:flex;align-items:center;justify-content:center;gap:5px;
+  transition:all .2s;font-size:12px;padding:0 12px;height:34px;
+  backdrop-filter:blur(8px);white-space:nowrap;font-family:inherit;
+}
+.bar-btn:hover{border-color:var(--accent);box-shadow:var(--glow)}
+.bar-btn:active{transform:scale(.92)}
+.bar-btn svg{flex-shrink:0}
+
+/* ── Card ── */
+.card{
+  background:var(--card);border:1px solid var(--border);border-radius:14px;
+  padding:18px;margin-bottom:14px;backdrop-filter:blur(16px);
+  box-shadow:var(--shadow);transition:border-color .3s,box-shadow .3s;
+}
+.card.parsing{border-color:var(--accent);box-shadow:var(--glow);animation:pulse-border 2s infinite}
+@keyframes pulse-border{0%,100%{box-shadow:var(--glow)}50%{box-shadow:0 0 32px rgba(0,255,136,.2)}}
+
+/* ── Input ── */
+textarea{
+  width:100%;min-height:80px;border:1px solid var(--border);border-radius:8px;
+  background:var(--input-bg);color:var(--text);font-size:14px;line-height:1.6;
+  resize:vertical;padding:10px 12px;outline:none;transition:border-color .2s;
+  font-family:inherit;
+}
+textarea:focus{border-color:var(--accent)}
+textarea::placeholder{color:var(--text3)}
+
+/* ── Buttons ── */
+.row{display:flex;align-items:center;gap:8px;margin-top:12px}
+.spacer{flex:1}
+.btn{
+  border:none;border-radius:999px;font-size:13px;font-weight:600;
+  padding:0 18px;height:38px;line-height:38px;cursor:pointer;
+  transition:all .15s;font-family:inherit;
+}
+.btn:active{transform:scale(.95)}
+.btn:disabled{opacity:.35;cursor:not-allowed;transform:none}
+.btn-ghost{background:transparent;color:var(--accent);padding:0 8px;height:30px;line-height:30px;font-size:12px;font-weight:500}
+.btn-primary{background:var(--accent);color:#0d1117}
+.btn-primary:hover:not(:disabled){filter:brightness(1.1)}
+.btn-primary:disabled{background:var(--text3)}
+.btn-secondary{background:var(--accent-dim);color:var(--accent);border:1px solid var(--border)}
+.btn-secondary:hover:not(:disabled){background:var(--border)}
+
+/* ── Preview ── */
+.meta-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.tag{
+  font-size:11px;border-radius:4px;padding:1px 8px;
+  font-weight:500;letter-spacing:.3px;
+}
+.tag-author{background:var(--accent-dim);color:var(--accent)}
+.tag-duration{background:rgba(0,212,255,.12);color:var(--accent2)}
+.desc{margin-top:8px;font-size:15px;line-height:1.5}
+.stats{display:flex;flex-wrap:wrap;gap:12px;margin-top:10px;font-size:12px;color:var(--text2)}
+.stat{display:flex;align-items:center;gap:3px}
+.stat-icon{font-size:11px}
+
+video{
+  width:100%;border-radius:10px;background:#000;margin-top:14px;
+  max-height:400px;object-fit:contain;border:1px solid var(--border);
+}
+
+/* ── Progress ── */
+.progress-wrap{margin-top:10px;display:none}
+.progress-bar{height:4px;background:var(--bg2);border-radius:2px;overflow:hidden}
+.progress-bar .fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:2px;transition:width .3s}
+.progress-text{font-size:11px;color:var(--text2);margin-top:6px;text-align:center;font-family:"SF Mono","Fira Code",monospace}
+
+/* ── Parse progress ── */
+.parse-progress{margin-top:14px;display:none}
+.parse-bar{height:4px;background:var(--bg2);border-radius:2px;overflow:hidden;position:relative}
+.parse-bar .scan{
+  position:absolute;top:0;left:-40%;width:40%;height:100%;
+  background:linear-gradient(90deg,transparent,var(--accent),transparent);
+  border-radius:2px;animation:scan 1.6s ease-in-out infinite;
+}
+@keyframes scan{0%{left:-40%}100%{left:100%}}
+.parse-steps{margin-top:8px;font-size:12px;color:var(--text2);line-height:1.8}
+.parse-steps .step{opacity:.3;transition:opacity .3s}
+.parse-steps .step.active{opacity:1;color:var(--accent)}
+.parse-steps .step.done{opacity:.6}
+.parse-steps .step.done::before{content:'✓ ';color:var(--accent)}
+.parse-steps .step.active::before{content:'▸ '}
+
+/* ── Actions ── */
+.actions{display:flex;gap:8px;margin-top:16px}
+.actions .btn{flex:1;text-align:center}
+
+/* ── Log panel ── */
+.log-toggle{
+  position:fixed;bottom:0;left:0;right:0;z-index:100;
+  display:flex;align-items:center;justify-content:center;gap:6px;
+  padding:8px 0;
+  background:linear-gradient(transparent,var(--bg) 40%);
+  color:var(--text2);font-size:12px;cursor:pointer;
+  transition:color .2s;
+}
+.log-toggle:hover{color:var(--accent)}
+.log-chevron{transition:transform .3s;font-size:10px}
+.log-chevron.open{transform:rotate(180deg)}
+
+.log-panel{
+  position:fixed;bottom:0;left:0;right:0;z-index:101;
+  max-height:55vh;background:var(--log-bg);border-top:1px solid var(--border);
+  border-radius:16px 16px 0 0;overflow:hidden;
+  transform:translateY(100%);transition:transform .35s cubic-bezier(.4,0,.2,1);
+  backdrop-filter:blur(16px);
+}
+.log-panel.open{transform:translateY(0)}
+.log-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:14px 18px 10px;border-bottom:1px solid var(--border);
+}
+.log-header span{font-size:13px;font-weight:600;color:var(--accent);letter-spacing:.5px}
+.log-close{
+  width:28px;height:28px;border-radius:8px;border:1px solid var(--border);
+  background:transparent;color:var(--text2);cursor:pointer;
+  display:flex;align-items:center;justify-content:center;font-size:14px;
+}
+.log-content{
+  padding:10px 18px 20px;overflow-y:auto;max-height:calc(55vh - 50px);
+  font-family:"SF Mono","Fira Code","Cascadia Code",monospace;font-size:12px;
+}
+.log-entry{
+  padding:6px 0;border-bottom:1px solid rgba(0,255,136,.06);
+  color:var(--text2);line-height:1.5;
+}
+.log-entry .log-time{color:var(--accent2);margin-right:8px}
+.log-entry .log-location{color:var(--accent)}
+.log-empty{color:var(--text3);text-align:center;padding:24px 0;font-size:12px}
+
+/* ── Toast ── */
+.toast{
+  position:fixed;top:20px;left:50%;transform:translateX(-50%) translateY(-80px);
+  background:var(--card);border:1px solid var(--accent);color:var(--accent);
+  padding:8px 20px;border-radius:999px;font-size:13px;z-index:200;
+  backdrop-filter:blur(12px);box-shadow:var(--glow);
+  transition:transform .3s cubic-bezier(.4,0,.2,1);pointer-events:none;
+}
+.toast.show{transform:translateX(-50%) translateY(0)}
+
+/* ── Mobile tweaks ── */
+@media(max-width:480px){
+  .container{padding:12px 12px 72px}
+  .topbar h1{font-size:16px}
+  textarea{min-height:64px;font-size:13px}
+  .btn{height:36px;line-height:36px;font-size:12px;padding:0 14px}
+  .desc{font-size:14px}
+  video{max-height:56vw}
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar{width:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+</style>
+</head>
+<body>
+
+<canvas id="binaryCanvas"></canvas>
+
+<div class="container">
+  <!-- Top bar -->
+  <div class="topbar">
+    <button class="bar-btn" id="themeBtn">
+      <span id="themeIcon">&#9789;</span>
+      <span id="themeLabel">深色</span>
+    </button>
+    <h1>DOUYIN DL</h1>
+    <button class="bar-btn" id="shareBtn">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+      <span>分享</span>
+    </button>
+  </div>
+
+  <!-- Input card -->
+  <div class="card" id="inputCard">
+    <textarea id="input" placeholder="粘贴抖音 App「复制链接」得到的整段文案，或 v.douyin.com 短链"></textarea>
+    <div class="row">
+      <button class="btn btn-ghost" id="pasteBtn">粘贴</button>
+      <button class="btn btn-ghost" id="clearBtn" style="display:none">清空</button>
+      <div class="spacer"></div>
+      <button class="btn btn-primary" id="parseBtn">解析视频</button>
+    </div>
+    <div class="parse-progress" id="parseProgress">
+      <div class="parse-bar"><div class="scan"></div></div>
+      <div class="parse-steps" id="parseSteps">
+        <div class="step" data-step="0">解析分享链接</div>
+        <div class="step" data-step="1">获取视频信息</div>
+        <div class="step" data-step="2">提取无水印地址</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Preview card -->
+  <div class="card" id="preview" style="display:none">
+    <div class="meta-top">
+      <span class="tag tag-author" id="authorEl"></span>
+      <span class="tag tag-duration" id="durationEl"></span>
+    </div>
+    <div class="desc" id="descEl"></div>
+    <div class="stats" id="statsEl"></div>
+    <video id="videoEl" controls playsinline></video>
+    <div class="progress-wrap" id="progressWrap">
+      <div class="progress-bar"><div class="fill" id="progressFill"></div></div>
+      <div class="progress-text" id="progressText"></div>
+    </div>
+    <div class="actions">
+      <button class="btn btn-primary" id="saveBtn" disabled>下载视频</button>
+    </div>
+  </div>
+</div>
+
+<!-- Log toggle -->
+<div class="log-toggle" id="logToggle">
+  <span class="log-chevron" id="logChevron">&#9650;</span>
+  <span>OP LOG</span>
+</div>
+
+<!-- Log panel -->
+<div class="log-panel" id="logPanel">
+  <div class="log-header">
+    <span>// REALTIME LOG</span>
+    <button class="log-close" id="logClose">&#10005;</button>
+  </div>
+  <div class="log-content" id="logContent">
+    <div class="log-empty">暂无操作记录</div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+/* ── Helpers ── */
+const $ = id => document.getElementById(id);
+function fmtCount(n) {
+  if (n == null) return '';
+  if (n >= 10000) return (n / 10000).toFixed(1) + 'w';
+  if (n >= 1000) return (n / 1000).toFixed(1) + 'k';
+  return String(n);
+}
+function showToast(msg, dur) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.classList.remove('show'), dur || 2000);
+}
+
+/* ── Theme ── */
+const themeBtn = $('themeBtn');
+const themeIcon = $('themeIcon');
+const themeLabel = $('themeLabel');
+function applyTheme(th) {
+  document.documentElement.setAttribute('data-theme', th);
+  themeIcon.innerHTML = th === 'dark' ? '&#9789;' : '&#9788;';
+  themeLabel.textContent = th === 'dark' ? '深色' : '浅色';
+  try { localStorage.setItem('theme', th); } catch(_) {}
+}
+applyTheme(localStorage.getItem('theme') || 'dark');
+themeBtn.addEventListener('click', () => {
+  const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+  applyTheme(next);
+});
+
+/* ── Share (copy URL) ── */
+function copyText(text) {
+  // Modern API (requires HTTPS + user gesture)
+  if (navigator.clipboard && window.isSecureContext) {
+    return navigator.clipboard.writeText(text);
+  }
+  // Fallback for HTTP / older Safari
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.cssText = 'position:fixed;left:-9999px;top:-9999px;opacity:0';
+  document.body.appendChild(ta);
+  ta.focus();
+  ta.select();
+  const ok = document.execCommand('copy');
+  document.body.removeChild(ta);
+  return ok ? Promise.resolve() : Promise.reject(new Error('execCommand failed'));
+}
+$('shareBtn').addEventListener('click', async () => {
+  try {
+    await copyText(location.href);
+    showToast('链接已复制，发送给好友吧');
+  } catch(_) {
+    showToast('复制失败，请手动复制地址栏链接');
+  }
+});
+
+/* ── Input ── */
+const inputEl = $('input');
+const clearBtn = $('clearBtn');
+inputEl.addEventListener('input', () => {
+  clearBtn.style.display = inputEl.value ? '' : 'none';
+});
+$('pasteBtn').addEventListener('click', async () => {
+  try {
+    const text = await navigator.clipboard.readText();
+    inputEl.value = text;
+    clearBtn.style.display = '';
+  } catch(_) { inputEl.focus(); }
+});
+clearBtn.addEventListener('click', () => {
+  inputEl.value = '';
+  clearBtn.style.display = 'none';
+  $('preview').style.display = 'none';
+});
+
+/* ── Parse ── */
+let videoUrl = '';
+let videoTitle = 'douyin视频';
+const parseProgress = $('parseProgress');
+const stepEls = document.querySelectorAll('#parseSteps .step');
+
+function setParseStep(idx) {
+  stepEls.forEach((el, i) => {
+    el.className = 'step';
+    if (i < idx) el.classList.add('done');
+    else if (i === idx) el.classList.add('active');
+  });
+}
+
+$('parseBtn').addEventListener('click', async () => {
+  const text = inputEl.value.trim();
+  if (!text) return;
+
+  const parseBtn = $('parseBtn');
+  const inputCard = $('inputCard');
+  parseBtn.disabled = true;
+  parseBtn.textContent = '解析中…';
+  inputCard.classList.add('parsing');
+  parseProgress.style.display = '';
+  setParseStep(0);
+  $('preview').style.display = 'none';
+
+  // Simulate step progression while waiting for the API
+  const stepTimers = [
+    setTimeout(() => setParseStep(1), 800),
+    setTimeout(() => setParseStep(2), 2500),
+  ];
+
+  try {
+    const res = await fetch('/api/parse', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text })
+    });
+    const body = await res.json();
+
+    stepTimers.forEach(t => clearTimeout(t));
+
+    if (body.code !== 0 || !body.data || !body.data.videoUrl) {
+      showToast(body.msg || '解析失败');
+      return;
+    }
+
+    // All steps done
+    setParseStep(3);
+
+    const d = body.data;
+    videoUrl = d.videoUrl;
+    videoTitle = d.title || '抖音视频';
+
+    $('authorEl').textContent = d.author ? '@' + d.author : '';
+    $('authorEl').style.display = d.author ? '' : 'none';
+    $('durationEl').textContent = d.durationFormatted || '';
+    $('durationEl').style.display = d.durationFormatted ? '' : 'none';
+    $('descEl').textContent = d.title || '';
+
+    const stats = [];
+    if (d.likeCount) stats.push('<span class="stat"><span class="stat-icon">♥</span>' + fmtCount(d.likeCount) + '</span>');
+    if (d.commentCount) stats.push('<span class="stat"><span class="stat-icon">✎</span>' + fmtCount(d.commentCount) + '</span>');
+    if (d.repostCount) stats.push('<span class="stat"><span class="stat-icon">↗</span>' + fmtCount(d.repostCount) + '</span>');
+    if (d.saveCount) stats.push('<span class="stat"><span class="stat-icon">★</span>' + fmtCount(d.saveCount) + '</span>');
+    if (d.width && d.height) stats.push('<span class="stat">' + d.width + '×' + d.height + '</span>');
+    $('statsEl').innerHTML = stats.join('');
+
+    $('videoEl').src = '/api/download?url=' + encodeURIComponent(d.videoUrl);
+    $('preview').style.display = '';
+    $('saveBtn').disabled = false;
+  } catch (e) {
+    stepTimers.forEach(t => clearTimeout(t));
+    showToast('网络异常：' + e.message);
+  } finally {
+    parseBtn.disabled = false;
+    parseBtn.textContent = '解析视频';
+    inputCard.classList.remove('parsing');
+    parseProgress.style.display = 'none';
+  }
+});
+
+/* ── Download / Save to album ── */
+$('saveBtn').addEventListener('click', async () => {
+  if (!videoUrl) return;
+  const saveBtn = $('saveBtn');
+  const progressWrap = $('progressWrap');
+  const progressFill = $('progressFill');
+  const progressText = $('progressText');
+
+  saveBtn.disabled = true;
+  saveBtn.textContent = '下载中…';
+  progressWrap.style.display = '';
+  progressFill.style.width = '0%';
+  progressText.textContent = '正在连接…';
+
+  const startTime = Date.now();
+
+  try {
+    const proxyUrl = '/api/download?url=' + encodeURIComponent(videoUrl);
+    const res = await fetch(proxyUrl);
+    if (!res.ok) throw new Error('下载失败');
+
+    const contentLength = res.headers.get('content-length');
+    const total = contentLength ? parseInt(contentLength, 10) : 0;
+    let loaded = 0;
+
+    const reader = res.body.getReader();
+    const chunks = [];
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+      loaded += value.length;
+
+      const elapsed = (Date.now() - startTime) / 1000;
+      const speed = loaded / elapsed; // bytes/sec
+
+      if (total) {
+        const pct = Math.round(loaded / total * 100);
+        progressFill.style.width = pct + '%';
+        const remain = ((total - loaded) / speed);
+        const speedStr = speed > 1048576 ? (speed / 1048576).toFixed(1) + ' MB/s' : (speed / 1024).toFixed(0) + ' KB/s';
+        const remainStr = remain > 60 ? Math.ceil(remain / 60) + '分钟' : Math.ceil(remain) + '秒';
+        progressText.textContent = (loaded / 1048576).toFixed(1) + ' / ' + (total / 1048576).toFixed(1) + ' MB  ' + pct + '%  ' + speedStr + '  剩余 ' + remainStr;
+      } else {
+        const speedStr = speed > 1048576 ? (speed / 1048576).toFixed(1) + ' MB/s' : (speed / 1024).toFixed(0) + ' KB/s';
+        progressText.textContent = (loaded / 1048576).toFixed(1) + ' MB  ' + speedStr;
+      }
+    }
+
+    const blob = new Blob(chunks, { type: 'video/mp4' });
+    const safeName = videoTitle.slice(0, 40).replace(/[\\/:*?"<>|\s]/g, '_') + '.mp4';
+    const file = new File([blob], safeName, { type: 'video/mp4' });
+
+    // iOS / mobile: share sheet → "存储视频" saves to Photos album
+    if (navigator.share) {
+      const canShareFiles = navigator.canShare && navigator.canShare({ files: [file] });
+      if (canShareFiles) {
+        try {
+          await navigator.share({ files: [file], title: videoTitle });
+          showToast('视频已保存到相册');
+          logDownload();
+          return;
+        } catch (e) {
+          if (e.name === 'AbortError') return;
+        }
+      }
+    }
+
+    // Desktop / fallback: trigger browser download
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = safeName;
+    a.click();
+    URL.revokeObjectURL(a.href);
+
+    progressFill.style.width = '100%';
+    progressText.textContent = '下载完成';
+
+    const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
+    if (isIOS) {
+      showToast('视频已下载到「文件」App，打开后点分享可存到相册');
+    } else {
+      showToast('视频已下载');
+    }
+
+    logDownload();
+  } catch (e) {
+    progressText.textContent = '下载失败：' + e.message;
+    showToast('下载失败');
+  } finally {
+    saveBtn.disabled = false;
+    saveBtn.textContent = '下载视频';
+    setTimeout(() => { progressWrap.style.display = 'none'; }, 3000);
+  }
+});
+
+/* ── Log download (lightweight POST, no video data) ── */
+function logDownload() {
+  try { fetch('/api/log-download', { method: 'POST' }); } catch(_) {}
+  fetchLogs();
+}
+
+/* ── Log panel ── */
+const logPanel = $('logPanel');
+const logToggle = $('logToggle');
+const logChevron = $('logChevron');
+const logContent = $('logContent');
+let logOpen = false;
+
+function toggleLog() {
+  logOpen = !logOpen;
+  logPanel.classList.toggle('open', logOpen);
+  logChevron.classList.toggle('open', logOpen);
+  if (logOpen) fetchLogs();
+}
+logToggle.addEventListener('click', toggleLog);
+$('logClose').addEventListener('click', toggleLog);
+
+async function fetchLogs() {
+  try {
+    const res = await fetch('/api/logs');
+    const body = await res.json();
+    if (body.code === 0 && body.data.length > 0) {
+      logContent.innerHTML = body.data.map(e =>
+        '<div class="log-entry"><span class="log-time">' + e.time + '</span><span class="log-location">' + e.location + '</span> 进行了视频下载</div>'
+      ).join('');
+    } else {
+      logContent.innerHTML = '<div class="log-empty">暂无操作记录</div>';
+    }
+  } catch(_) {}
+}
+
+// Auto-refresh logs when panel is open
+setInterval(() => { if (logOpen) fetchLogs(); }, 5000);
+
+/* ── Binary rain background ── */
+(function() {
+  const canvas = $('binaryCanvas');
+  const ctx = canvas.getContext('2d');
+  let cols, drops;
+  const fontSize = 14;
+  const chars = '01';
+
+  function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    cols = Math.floor(canvas.width / fontSize);
+    drops = new Array(cols).fill(0).map(() => Math.random() * -50);
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  function draw() {
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    ctx.fillStyle = isDark ? 'rgba(13,17,23,0.12)' : 'rgba(240,242,245,0.15)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.font = fontSize + 'px "SF Mono","Fira Code","Cascadia Code",monospace';
+
+    for (let i = 0; i < cols; i++) {
+      const ch = chars[Math.floor(Math.random() * chars.length)];
+      const x = i * fontSize;
+      const y = drops[i] * fontSize;
+
+      // Head char is brighter
+      ctx.fillStyle = isDark
+        ? 'rgba(0,255,136,' + (0.6 + Math.random() * 0.4) + ')'
+        : 'rgba(5,150,105,' + (0.3 + Math.random() * 0.3) + ')';
+      ctx.fillText(ch, x, y);
+
+      // Trailing chars are dimmer
+      if (drops[i] > 1) {
+        const prevCh = chars[Math.floor(Math.random() * chars.length)];
+        ctx.fillStyle = isDark ? 'rgba(0,255,136,0.15)' : 'rgba(5,150,105,0.1)';
+        ctx.fillText(prevCh, x, (drops[i] - 1) * fontSize);
+      }
+
+      if (y > canvas.height && Math.random() > 0.975) {
+        drops[i] = 0;
+      }
+      drops[i] += 0.4 + Math.random() * 0.3;
+    }
+    requestAnimationFrame(draw);
+  }
+  draw();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,155 @@
+.page {
+  padding: 32rpx 24rpx 80rpx;
+  min-height: 100vh;
+  box-sizing: border-box;
+}
+
+.header {
+  padding: 16rpx 8rpx 32rpx;
+}
+.title {
+  display: block;
+  font-size: 44rpx;
+  font-weight: 600;
+  letter-spacing: 1rpx;
+}
+.subtitle {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 26rpx;
+  color: #8a8a8e;
+}
+
+.card {
+  background: #ffffff;
+  border-radius: 24rpx;
+  padding: 28rpx 24rpx;
+  margin-bottom: 24rpx;
+  box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.04);
+}
+
+.input {
+  width: 100%;
+  min-height: 160rpx;
+  font-size: 28rpx;
+  line-height: 1.5;
+  color: #1c1c1e;
+  box-sizing: border-box;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  margin-top: 20rpx;
+  gap: 12rpx;
+}
+.spacer { flex: 1; }
+
+.btn-primary {
+  background: #1c1c1e;
+  color: #fff;
+  border-radius: 999rpx;
+  font-size: 28rpx;
+  padding: 0 36rpx;
+  height: 72rpx;
+  line-height: 72rpx;
+}
+.btn-primary[disabled] { background: #c7c7cc; color: #fff; }
+
+.btn-secondary {
+  background: #f0f0f3;
+  color: #1c1c1e;
+  border-radius: 999rpx;
+  font-size: 28rpx;
+  padding: 0 36rpx;
+  height: 72rpx;
+  line-height: 72rpx;
+}
+.btn-secondary[disabled] { color: #c7c7cc; }
+
+.btn-ghost {
+  background: transparent;
+  color: #007aff;
+  font-size: 26rpx;
+  padding: 0 12rpx;
+  line-height: 56rpx;
+  height: 56rpx;
+  border: none;
+}
+.btn-ghost::after { border: none; }
+
+.preview .meta {
+  margin-bottom: 20rpx;
+}
+.meta-top {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+}
+.author {
+  font-size: 26rpx;
+  color: #8a8a8e;
+}
+.duration {
+  font-size: 22rpx;
+  color: #fff;
+  background: rgba(0,0,0,0.5);
+  border-radius: 8rpx;
+  padding: 2rpx 12rpx;
+}
+.desc {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 30rpx;
+  color: #1c1c1e;
+  line-height: 1.45;
+}
+.stats {
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+  margin-top: 12rpx;
+  flex-wrap: wrap;
+}
+.stat {
+  display: flex;
+  align-items: center;
+  gap: 4rpx;
+  font-size: 22rpx;
+  color: #8a8a8e;
+}
+.stat-icon {
+  font-size: 22rpx;
+}
+.stat-val {
+  font-size: 22rpx;
+}
+
+.video {
+  width: 100%;
+  height: 420rpx;
+  border-radius: 16rpx;
+  background: #000;
+}
+
+.hint {
+  margin-top: 16rpx;
+  font-size: 24rpx;
+  color: #8a8a8e;
+  text-align: center;
+}
+
+.actions {
+  display: flex;
+  gap: 16rpx;
+  margin-top: 24rpx;
+}
+.actions .btn-primary,
+.actions .btn-secondary { flex: 1; }
+
+.footer {
+  margin-top: 40rpx;
+  text-align: center;
+  font-size: 22rpx;
+  color: #c7c7cc;
+}

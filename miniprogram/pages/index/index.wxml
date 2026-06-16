@@ -1,0 +1,73 @@
+<view class="page">
+  <view class="header">
+    <text class="title">抖音分享助手</text>
+    <text class="subtitle">粘贴分享链接，一键下载并发给好友</text>
+  </view>
+
+  <view class="card">
+    <textarea
+      class="input"
+      placeholder="粘贴抖音 App「复制链接」得到的整段文案，或 v.douyin.com 短链"
+      value="{{input}}"
+      bindinput="onInput"
+      maxlength="-1"
+      auto-height
+    />
+    <view class="row">
+      <button class="btn-ghost" size="mini" bindtap="onPaste">粘贴</button>
+      <button class="btn-ghost" size="mini" bindtap="onClear" wx:if="{{input}}">清空</button>
+      <view class="spacer" />
+      <button class="btn-primary" bindtap="onParse" loading="{{parsing}}" disabled="{{parsing || !input}}">
+        {{parsing ? '解析中' : '解析视频'}}
+      </button>
+    </view>
+  </view>
+
+  <view class="card preview" wx:if="{{videoUrl}}">
+    <view class="meta">
+      <view class="meta-top">
+        <text class="author" wx:if="{{author}}">@{{author}}</text>
+        <text class="duration" wx:if="{{durationFormatted}}">{{durationFormatted}}</text>
+      </view>
+      <text class="desc">{{title}}</text>
+      <view class="stats" wx:if="{{likeCount || saveCount || commentCount || repostCount}}">
+        <view class="stat" wx:if="{{likeCount}}">
+          <text class="stat-icon">♥</text>
+          <text class="stat-val">{{likeCountText}}</text>
+        </view>
+        <view class="stat" wx:if="{{commentCount}}">
+          <text class="stat-icon">✎</text>
+          <text class="stat-val">{{commentCountText}}</text>
+        </view>
+        <view class="stat" wx:if="{{repostCount}}">
+          <text class="stat-icon">↗</text>
+          <text class="stat-val">{{repostCountText}}</text>
+        </view>
+        <view class="stat" wx:if="{{saveCount}}">
+          <text class="stat-icon">★</text>
+          <text class="stat-val">{{saveCountText}}</text>
+        </view>
+        <view class="stat" wx:if="{{width && height}}">
+          <text class="stat-val">{{width}}×{{height}}</text>
+        </view>
+      </view>
+    </view>
+    <video
+      class="video"
+      src="{{videoUrl}}"
+      poster="{{cover}}"
+      controls
+      show-center-play-btn
+      object-fit="contain"
+    />
+    <view class="hint" wx:if="{{downloading}}">视频准备中… {{downloadProgress}}%</view>
+    <view class="actions">
+      <button class="btn-secondary" bindtap="onSave" disabled="{{!localPath}}">保存到相册</button>
+      <button class="btn-primary" bindtap="onShare" disabled="{{!localPath}}">分享给好友</button>
+    </view>
+  </view>
+
+  <view class="footer">
+    <text>仅供个人学习使用，请勿用于商业用途</text>
+  </view>
+</view>
