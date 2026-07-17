@@ -16,14 +16,13 @@
 
 ```
 videx/
-├── server/              # Node.js 后端
-│   ├── src/
-│   │   ├── index.js     # Express 服务 + 路由 + 代理下载
-│   │   └── parser.js    # 多平台解析引擎（抖音 + 快手）
-│   ├── public/
-│   │   └── index.html   # 前端单页应用
-│   └── package.json
-└── miniprogram/         # 微信小程序（旧版）
+└── server/              # Web 应用与 Node.js 后端
+    ├── src/
+    │   ├── index.js     # Express 服务 + 路由 + 代理下载
+    │   └── parser.js    # 多平台解析引擎（抖音 + 快手）
+    ├── public/
+    │   └── index.html   # 前端单页应用
+    └── package.json
 ```
 
 ## 架构
@@ -93,21 +92,16 @@ async function parse(text) {
 **快手解析流程**：
 1. `parseWithYtDlp(url)` — yt-dlp 尝试（服务器 yt-dlp 版本较旧时可能不支持）
 2. 降级 `parseKuaishouHtml(url)` — 解析短链重定向 → 提取 `window.INIT_STATE` 中的 photo 对象
-3. HEAD 请求并行获取各格式文件大小
 
-### 代理下载 (server/src/index.js)
+### 安全代理下载
 
 ```js
-app.get('/api/download', async (req, res) => {
-  const upstream = await axios.get(url, {
-    responseType: 'stream',
-    headers: { 'User-Agent': IPHONE_UA, 'Referer': 'https://www.douyin.com/' },
-  });
-  upstream.data.pipe(res);
-});
+const payload = verifyDownloadToken(req.query.token, tokenSecret);
+assertAllowedMediaUrl(payload.url);
+const upstream = await openMediaStream(payload.url, { range: req.headers.range });
 ```
 
-浏览器无法直接访问视频平台 CDN（Referer/UA 限制），通过服务端代理 pipe 视频流。
+解析接口将媒体 URL 替换为短期签名令牌。下载接口只接受令牌，并对媒体域名、每次重定向及 DNS 解析结果做校验，拒绝私网、环回、链路本地等地址。代理支持 Range 请求、下载大小限制、并发限制和客户端断开取消。
 
 ### 音频提取 (server/public/index.html)
 
@@ -127,16 +121,18 @@ app.get('/api/download', async (req, res) => {
 curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
 sudo apt install -y nodejs
 
-# 安装 Python + yt-dlp
+# 安装 Python 和固定版本的 yt-dlp
 sudo apt install -y python3 python3-pip
-pip3 install yt-dlp
+python3 -m pip install -r server/requirements.txt
 ```
 
 ### 2. 部署服务
 
 ```bash
 cd server
-npm install --production
+npm ci --omit=dev
+cp .env.example .env
+# 编辑 .env，至少设置 DOWNLOAD_TOKEN_SECRET
 
 # 前台运行
 npm start
@@ -146,6 +142,15 @@ nohup node src/index.js > server.log 2>&1 &
 ```
 
 默认监听 `8787` 端口，可通过 `.env` 中的 `PORT` 修改。
+
+启动时会执行 `python3 -m yt_dlp --version`。Python 路径可通过 `PYTHON_BIN` 修改，缺少运行依赖时服务会直接退出并输出错误。
+
+也可以从仓库根目录使用 Docker 构建：
+
+```bash
+docker build -t videx .
+docker run --rm -p 8787:8787 --env-file server/.env videx
+```
 
 ### 3. Nginx 反代
 
@@ -167,9 +172,32 @@ server {
 
 ### 4. 环境变量
 
-| 变量   | 默认值  | 说明      |
-|--------|---------|----------|
-| PORT   | 8787    | 服务监听端口 |
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `PORT` | `8787` | 服务监听端口 |
+| `PYTHON_BIN` | `python3` | Python 可执行文件 |
+| `DOWNLOAD_TOKEN_SECRET` | 启动时随机生成 | 下载令牌签名密钥；生产环境必须固定配置，多实例必须相同 |
+| `DOWNLOAD_TOKEN_TTL_MS` | `600000` | 下载令牌有效期（毫秒） |
+| `MAX_DOWNLOAD_BYTES` | `524288000` | 单次下载最大字节数 |
+| `MAX_PARSE_CONCURRENCY` | `2` | 最大并发解析数 |
+| `MAX_DOWNLOAD_CONCURRENCY` | `4` | 最大并发下载数 |
+| `RATE_LIMIT_WINDOW_MS` | `60000` | API 限流窗口（毫秒） |
+| `RATE_LIMIT_MAX` | `60` | 每个 IP 在窗口内的最大请求数 |
+| `MEDIA_HOST_ALLOWLIST` | 空 | 额外可信媒体 CDN 域名后缀，逗号分隔 |
+| `CORS_ORIGIN` | 空 | 需要跨域调用时允许的来源 |
+
+## 测试与 CI
+
+```bash
+cd server
+npm ci
+npm test
+npm run check:runtime
+```
+
+单元测试使用脱敏 fixture 覆盖抖音 `_ROUTER_DATA`、快手 `INIT_STATE`、格式筛选、下载令牌和 SSRF 防护。GitHub Actions 会在 push 和 pull request 时运行完整测试。
+
+计划任务 `Live platform check` 可用仓库 Secrets `DOUYIN_TEST_URL`、`KUAISHOU_TEST_URL` 提供真实测试链接；未配置的目标会跳过。
 
 ## API
 
@@ -184,7 +212,7 @@ server {
 {
   "code": 0,
   "data": {
-    "videoUrl": "https://...",
+    "videoUrl": "<signed-download-token>",
     "cover": "https://...",
     "title": "xxxx",
     "author": "xxxx",
@@ -196,16 +224,16 @@ server {
     "width": 720,
     "height": 1280,
     "formats": [
-      { "formatId": 1, "label": "720p", "height": 1280, "url": "https://...", "filesize": 4566435 }
+      { "formatId": 1, "label": "720p", "height": 1280, "url": "<signed-download-token>", "filesize": 4566435 }
     ],
     "platform": "kuaishou"
   }
 }
 ```
 
-### GET /api/download?url=\<encodedUrl\>
+### GET /api/download?token=\<signedToken\>
 
-代理下载视频流。
+使用解析接口返回的短期签名令牌代理下载视频流。服务端不会接受任意 URL。
 
 ### POST /api/log-download
 

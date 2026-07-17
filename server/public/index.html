@@ -266,12 +266,21 @@ video{width:100%;border-radius:10px;background:#000;margin-top:14px;max-height:4
     inputEl.value = '';
     clearBtn.style.display = 'none';
     $('preview').style.display = 'none';
+    $('videoEl').pause();
+    $('videoEl').removeAttribute('src');
+    $('videoEl').load();
+    $('saveBtn').disabled = true;
     $('extractAudioBtn').disabled = true;
     $('formatPicker').style.display = 'none';
+    formats = [];
+    videoToken = '';
+    $('qualitySelect').innerHTML = '';
+    $('qualityRow').style.display = 'none';
   };
 
   // State
   var formats = [];
+  var videoToken = '';
   var videoTitle = '视频';
   var parseTimer = null;
 
@@ -292,6 +301,10 @@ video{width:100%;border-radius:10px;background:#000;margin-top:14px;max-height:4
     $('preview').style.display = 'none';
     $('extractAudioBtn').disabled = true;
     $('formatPicker').style.display = 'none';
+    formats = [];
+    videoToken = '';
+    $('qualitySelect').innerHTML = '';
+    $('qualityRow').style.display = 'none';
 
     var stepIdx = 0;
     var steps = [
@@ -326,6 +339,7 @@ video{width:100%;border-radius:10px;background:#000;margin-top:14px;max-height:4
 
       var d = body.data;
       videoTitle = d.title || '抖音视频';
+      videoToken = d.videoUrl;
       formats = d.formats || [];
 
       $('authorEl').textContent = d.author ? '@' + d.author : '';
@@ -346,8 +360,9 @@ video{width:100%;border-radius:10px;background:#000;margin-top:14px;max-height:4
       // Quality selector
       var qSelect = $('qualitySelect');
       var qRow = $('qualityRow');
+      qSelect.innerHTML = '';
+      qRow.style.display = 'none';
       if (formats.length > 0) {
-        qSelect.innerHTML = '';
         for (var i = 0; i < formats.length; i++) {
           var opt = document.createElement('option');
           opt.value = formats[i].url;
@@ -355,13 +370,13 @@ video{width:100%;border-radius:10px;background:#000;margin-top:14px;max-height:4
           opt.textContent = formats[i].label + sizeStr;
           qSelect.appendChild(opt);
         }
-        // Default to first (lowest quality)
+        // Formats are ordered highest quality first by the server.
         qSelect.selectedIndex = 0;
         qRow.style.display = '';
       }
 
       var defaultUrl = (formats.length > 0 ? formats[0].url : d.videoUrl);
-      $('videoEl').src = '/api/download?url=' + encodeURIComponent(defaultUrl);
+      $('videoEl').src = '/api/download?token=' + encodeURIComponent(defaultUrl);
       $('preview').style.display = 'block';
       $('saveBtn').disabled = false;
       $('extractAudioBtn').disabled = false;
@@ -380,7 +395,7 @@ video{width:100%;border-radius:10px;background:#000;margin-top:14px;max-height:4
     var qSelect = $('qualitySelect');
     var selectedUrl = (qSelect.options.length > 0 && qSelect.value)
       ? qSelect.value
-      : (formats.length > 0 ? formats[0].url : '');
+      : (formats.length > 0 ? formats[0].url : videoToken);
     if (!selectedUrl) return;
 
     var saveBtn = $('saveBtn');
@@ -406,7 +421,7 @@ video{width:100%;border-radius:10px;background:#000;margin-top:14px;max-height:4
     var dlHintTimer = setInterval(function() {
       dlHintIdx = (dlHintIdx + 1) % dlHints.length;
     }, 4000);
-    var proxyUrl = '/api/download?url=' + encodeURIComponent(selectedUrl);
+    var proxyUrl = '/api/download?token=' + encodeURIComponent(selectedUrl);
 
     fetch(proxyUrl).then(function(res) {
       if (!res.ok) throw new Error('下载失败');
@@ -717,7 +732,7 @@ video{width:100%;border-radius:10px;background:#000;margin-top:14px;max-height:4
 
     var qSelect = $('qualitySelect');
     var selectedUrl = (qSelect.options.length > 0 && qSelect.value)
-      ? qSelect.value : (formats.length > 0 ? formats[0].url : '');
+      ? qSelect.value : (formats.length > 0 ? formats[0].url : videoToken);
     if (!selectedUrl) return;
 
     var extractBtn = $('extractAudioBtn');
@@ -744,7 +759,7 @@ video{width:100%;border-radius:10px;background:#000;margin-top:14px;max-height:4
       progressInfo.textContent = loadHints[loadHintIdx];
     }, 3000);
 
-    var proxyUrl = '/api/download?url=' + encodeURIComponent(selectedUrl);
+    var proxyUrl = '/api/download?token=' + encodeURIComponent(selectedUrl);
     fetch(proxyUrl).then(function(res) {
       if (!res.ok) throw new Error('下载失败');
       return res.blob();
@@ -759,6 +774,10 @@ video{width:100%;border-radius:10px;background:#000;margin-top:14px;max-height:4
       showToast('加载失败');
       resetExtractBtn();
     });
+  });
+
+  $('qualitySelect').addEventListener('change', function() {
+    if (this.value) $('videoEl').src = '/api/download?token=' + encodeURIComponent(this.value);
   });
 
   // Binary rain

@@ -1,0 +1,7 @@
+.git
+.github
+server/node_modules
+server/.venv
+server/.env
+*.log
+.DS_Store

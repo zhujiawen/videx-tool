@@ -1,9 +1,6 @@
-const axios = require('axios');
 const { execFile } = require('child_process');
-
-const IPHONE_UA =
-  'Mozilla/5.0 (iPhone; CPU iPhone OS 16_5 like Mac OS X) AppleWebKit/605.1.15 ' +
-  '(KHTML, like Gecko) Version/16.5 Mobile/15E148 Safari/604.1';
+const { assertSupportedPageUrl } = require('./security');
+const { requestSupportedPage } = require('./page-request');
 
 const SHORT_LINK_RE = /https?:\/\/v\.douyin\.com\/[\w\-]+/;
 const FULL_LINK_RE = /https?:\/\/(?:www\.)?(?:iesdouyin|douyin)\.com\/(?:share\/)?video\/(\d+)/;
@@ -26,15 +23,8 @@ async function resolveAwemeId(url) {
   const shortMatch = url.match(SHORT_LINK_RE);
   if (!shortMatch) return null;
 
-  const resp = await axios.get(shortMatch[0], {
-    maxRedirects: 0,
-    validateStatus: (s) => s >= 200 && s < 400,
-    headers: { 'User-Agent': IPHONE_UA },
-    timeout: 15000,
-  });
-
-  const location = resp.headers.location || '';
-  const idMatch = location.match(AWEME_ID_RE);
+  const response = await requestSupportedPage(shortMatch[0]);
+  const idMatch = response.url.match(AWEME_ID_RE);
   return idMatch ? idMatch[1] : null;
 }
 
@@ -49,11 +39,11 @@ function parseWithYtDlp(url) {
       '--no-warnings',
       '--restrict-filenames',
       '--no-check-certificates',
-      '-f', 'bestvideo+bestaudio/best',
+      '-f', 'best',
       url
     ];
 
-    execFile('python', args, { timeout: 45000, maxBuffer: 10 * 1024 * 1024 }, (err, stdout, stderr) => {
+    execFile(process.env.PYTHON_BIN || 'python3', args, { timeout: 45000, maxBuffer: 10 * 1024 * 1024 }, (err, stdout, stderr) => {
       if (err) {
         reject(new Error(stderr || err.message));
         return;
@@ -69,13 +59,12 @@ function parseWithYtDlp(url) {
 
 async function fetchItemInfoFromHtml(awemeId) {
   const url = `https://www.iesdouyin.com/share/video/${awemeId}/`;
-  const resp = await axios.get(url, {
-    headers: { 'User-Agent': IPHONE_UA },
-    timeout: 15000,
-    responseType: 'text',
-    transformResponse: [(d) => d],
-  });
+  const resp = await requestSupportedPage(url);
   const html = typeof resp.data === 'string' ? resp.data : String(resp.data);
+  return extractDouyinItemFromHtml(html);
+}
+
+function extractDouyinItemFromHtml(html) {
   const m = html.match(/_ROUTER_DATA\s*=\s*(\{[\s\S]*?\});?\s*<\/script>/);
   if (!m) throw new Error('router data not found');
 
@@ -94,10 +83,14 @@ async function fetchItemInfoFromHtml(awemeId) {
   return item;
 }
 
+function parseDouyinHtml(html) {
+  return buildResultFromHtml(extractDouyinItemFromHtml(html));
+}
+
 function extractFormats(info) {
   const formats = (info.formats || []).filter(f => {
     const vcodec = (f.vcodec || '');
-    return vcodec !== 'none' && f.url;
+    return vcodec !== 'none' && f.acodec !== 'none' && f.url;
   });
 
   // Group by height, pick best per height
@@ -127,8 +120,7 @@ function extractFormats(info) {
     });
   }
 
-  // Sort by height ascending (lowest first)
-  result.sort((a, b) => a.height - b.height);
+  result.sort((a, b) => b.height - a.height);
   return result;
 }
 
@@ -221,26 +213,13 @@ function buildKuaishouResult(info) {
   };
 }
 
-async function resolveKuaishouShortUrl(url) {
-  const resp = await axios.get(url, {
-    maxRedirects: 5,
-    headers: { 'User-Agent': IPHONE_UA },
-    timeout: 15000,
-  });
-  return resp.request.res.responseUrl || url;
+async function parseKuaishouHtml(url) {
+  const resp = await requestSupportedPage(url);
+  const html = typeof resp.data === 'string' ? resp.data : String(resp.data);
+  return parseKuaishouHtmlDocument(html);
 }
 
-async function parseKuaishouHtml(url) {
-  const finalUrl = await resolveKuaishouShortUrl(url);
-
-  const resp = await axios.get(finalUrl, {
-    headers: { 'User-Agent': IPHONE_UA },
-    timeout: 15000,
-    responseType: 'text',
-    transformResponse: [(d) => d],
-  });
-  const html = typeof resp.data === 'string' ? resp.data : String(resp.data);
-
+function parseKuaishouHtmlDocument(html) {
   // Parse window.INIT_STATE
   const initStateMatch = html.match(/window\.INIT_STATE\s*=\s*(\{[\s\S]*?\});?\s*<\/script>/);
   if (!initStateMatch) throw new Error('快手页面数据未找到');
@@ -273,7 +252,7 @@ async function parseKuaishouHtml(url) {
   const cover = coverUrls.length > 0 ? coverUrls[0].url : '';
 
   // Extract multi-quality formats from manifest
-  const formats = [];
+  const formatsByResolution = new Map();
   const manifest = photo.manifest || {};
   const adaptationSet = manifest.adaptationSet || [];
   for (const as of adaptationSet) {
@@ -284,16 +263,24 @@ async function parseKuaishouHtml(url) {
       const qualityType = rep.qualityType || '';
       const w = rep.width || 0;
       const h = rep.height || 0;
-      let label = qualityType || (h ? h + 'p' : '原画');
-      formats.push({
-        formatId: rep.id || String(formats.length),
+      const label = qualityType || (h ? h + 'p' : '原画');
+      const key = w && h ? `${w}x${h}` : label;
+      const candidate = {
+        formatId: rep.id || String(formatsByResolution.size),
         label,
         height: h,
         url,
         filesize: null,
-      });
+        bitrate: rep.avgBitrate || 0,
+      };
+      const current = formatsByResolution.get(key);
+      if (!current || candidate.bitrate > current.bitrate) formatsByResolution.set(key, candidate);
     }
   }
+
+  const formats = Array.from(formatsByResolution.values())
+    .sort((a, b) => b.height - a.height)
+    .map(({ bitrate: _bitrate, ...format }) => format);
 
   // If no formats from manifest, use mainMvUrls
   if (formats.length === 0 && videoUrl) {
@@ -305,19 +292,6 @@ async function parseKuaishouHtml(url) {
       filesize: null,
     });
   }
-
-  // Fetch file sizes via HEAD requests (parallel, best-effort)
-  await Promise.all(formats.map(async (f) => {
-    try {
-      const head = await axios.head(f.url, {
-        timeout: 8000,
-        headers: { 'User-Agent': IPHONE_UA, 'Referer': 'https://www.kuaishou.com/' },
-        maxRedirects: 3,
-      });
-      const cl = head.headers['content-length'];
-      if (cl) f.filesize = parseInt(cl, 10);
-    } catch (_) {}
-  }));
 
   const durationMs = photo.duration || null;
   const durationSec = durationMs ? Math.round(durationMs / 1000) : null;
@@ -347,6 +321,10 @@ function isKuaishouUrl(url) {
   return KUAISHOU_URL_RE.test(url) || KUAISHOU_SHORT_RE.test(url);
 }
 
+function hasSelectableKuaishouFormat(result) {
+  return Boolean(result?.videoUrl && Array.isArray(result.formats) && result.formats.length > 0);
+}
+
 function formatDuration(seconds) {
   if (!seconds) return '';
   const s = Math.round(seconds);
@@ -367,15 +345,17 @@ async function parseDouyin(text) {
   if (!url.startsWith('http')) {
     throw new Error('no valid url');
   }
+  assertSupportedPageUrl(url);
+  const resolvedUrl = (await requestSupportedPage(url)).url;
 
   try {
-    const info = await parseWithYtDlp(url);
+    const info = await parseWithYtDlp(resolvedUrl);
     return buildResultFromYtDlp(info);
   } catch (e) {
     console.warn('[yt-dlp failed]', e.message.slice(0, 120), '— falling back to html parser');
   }
 
-  const awemeId = await resolveAwemeId(url);
+  const awemeId = await resolveAwemeId(resolvedUrl);
   if (!awemeId) throw new Error('aweme id not found');
 
   const item = await fetchItemInfoFromHtml(awemeId);
@@ -391,15 +371,26 @@ async function parseKuaishou(text) {
   if (!url.startsWith('http')) {
     throw new Error('no valid url');
   }
+  assertSupportedPageUrl(url);
+  const resolvedUrl = (await requestSupportedPage(url)).url;
+  let ytDlpFallback = null;
 
   try {
-    const info = await parseWithYtDlp(url);
-    return buildKuaishouResult(info);
+    const info = await parseWithYtDlp(resolvedUrl);
+    const result = buildKuaishouResult(info);
+    if (hasSelectableKuaishouFormat(result)) return result;
+    ytDlpFallback = result;
+    console.warn('[yt-dlp kuaishou incomplete] no selectable video formats — falling back to html parser');
   } catch (e) {
     console.warn('[yt-dlp kuaishou failed]', e.message.slice(0, 120), '— falling back to html parser');
   }
 
-  return parseKuaishouHtml(url);
+  try {
+    return await parseKuaishouHtml(resolvedUrl);
+  } catch (error) {
+    if (ytDlpFallback?.videoUrl) return ytDlpFallback;
+    throw error;
+  }
 }
 
 async function parse(text) {
@@ -408,4 +399,13 @@ async function parse(text) {
   return parseDouyin(text);
 }
 
-module.exports = { parseDouyin, parseKuaishou, parse };
+module.exports = {
+  parseDouyin,
+  parseKuaishou,
+  parse,
+  extractUrl,
+  extractFormats,
+  hasSelectableKuaishouFormat,
+  parseDouyinHtml,
+  parseKuaishouHtmlDocument,
+};
