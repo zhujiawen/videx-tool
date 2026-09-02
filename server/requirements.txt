@@ -1,1 +1,5 @@
-yt-dlp==2025.10.14
+# NOTE: 必须固定 2023.06.22 —— 2023.11+ 的 Douyin extractor 强制要求
+# "Fresh cookies"（服务器无浏览器 cookie），导致 item_list empty / 解析失败。
+# 2023.06.22 走 TikTok extractor 的 amemv API 无 cookie 路径可成功解析。
+# 升级 yt-dlp 前务必用生产抖音链接回归验证。
+yt-dlp==2023.06.22

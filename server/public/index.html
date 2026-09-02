@@ -656,7 +656,11 @@ video{width:100%;border-radius:10px;background:#000;margin-top:14px;max-height:4
       var source = ctx.createMediaElementSource(audio);
       var dest = ctx.createMediaStreamDestination();
       source.connect(dest);
-      source.connect(ctx.destination);
+      // 录制流照常采集;扬声器通路接 0 增益 → “提取音频”时原视频声音不会外放
+      var monitor = ctx.createGain();
+      monitor.gain.value = 0;
+      source.connect(monitor);
+      monitor.connect(ctx.destination);
 
       var recorder = new MediaRecorder(dest.stream, { mimeType: mimeType });
       var chunks = [];

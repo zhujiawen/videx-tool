@@ -10,7 +10,7 @@ const PAGE_RULES = new Map([
   ['v.kuaishou.com', /^\/[\w-]+\/?$/],
   ['kuaishou.com', /^\/short-video\/[\w-]+\/?$/],
   ['www.kuaishou.com', /^\/short-video\/[\w-]+\/?$/],
-  ['v.m.chenzhongtech.com', /^\/fw\/photo\/[\w-]+\/?$/],
+  ['v.m.chenzhongtech.com', /^\/fw\/(?:photo|long-video)\/[\w-]+\/?$/],
 ]);
 const DEFAULT_MEDIA_HOST_SUFFIXES = [
   'douyinvod.com',
@@ -19,6 +19,7 @@ const DEFAULT_MEDIA_HOST_SUFFIXES = [
   'byteimg.com',
   'zjcdn.com',
   'aweme.snssdk.com',
+  'amemv.com',
   'kwimgs.com',
   'kwaicdn.com',
   'kuaishou.com',

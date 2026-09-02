@@ -348,14 +348,20 @@ async function parseDouyin(text) {
   assertSupportedPageUrl(url);
   const resolvedUrl = (await requestSupportedPage(url)).url;
 
+  // Normalize resolved douyin URLs (e.g. iesdouyin.com/share/video/{id}?from_ssr=1)
+  // to canonical www.douyin.com/video/{id} so the pinned yt-dlp 2023.06.22
+  // (no-cookie amemv API path) can handle them.
+  const urlMatch = resolvedUrl.match(FULL_LINK_RE);
+  const normalizedUrl = urlMatch ? `https://www.douyin.com/video/${urlMatch[1]}` : resolvedUrl;
+
   try {
-    const info = await parseWithYtDlp(resolvedUrl);
+    const info = await parseWithYtDlp(normalizedUrl);
     return buildResultFromYtDlp(info);
   } catch (e) {
     console.warn('[yt-dlp failed]', e.message.slice(0, 120), '— falling back to html parser');
   }
 
-  const awemeId = await resolveAwemeId(resolvedUrl);
+  const awemeId = await resolveAwemeId(normalizedUrl);
   if (!awemeId) throw new Error('aweme id not found');
 
   const item = await fetchItemInfoFromHtml(awemeId);
